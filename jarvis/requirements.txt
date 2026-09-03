@@ -1,0 +1,5 @@
+openai>=1.68.0
+SpeechRecognition>=3.10.0
+PyAudio>=0.2.14
+pyautogui>=0.9.54; platform_system == "Windows"
+pyttsx3>=2.98; platform_system == "Windows"
