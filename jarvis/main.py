@@ -29,12 +29,14 @@ except Exception:
 
 from brain import Brain
 from explorer import Explorer
+from router_client import RouterClientError
 
 
 ASSISTANT_NAME = "Jarvis"
 BASE_DIR = Path(__file__).resolve().parent
 SYSTEM = platform.system()
 SILENT = os.getenv("JARVIS_SILENT", "").lower() in {"1", "true", "yes"}
+SHOW_ROUTE = os.getenv("JARVIS_SHOW_ROUTE", "").lower() in {"1", "true", "yes"}
 
 WEBSITES = {
     "google": "https://www.google.com",
@@ -114,8 +116,8 @@ def text_for_speech(text: str, max_characters: int = 500) -> str:
     return f"{shortened}. I've displayed the rest on screen."
 
 
-def take_voice_command() -> tuple[str | None, bool]:
-    """Return the recognized command and whether voice mode should fall back to text."""
+def take_voice_command(brain: Brain) -> tuple[str | None, bool]:
+    """Capture microphone audio and transcribe it through the private router."""
     if sr is None:
         speak("Voice recognition is not installed. Run the setup file first.")
         return None, True
@@ -127,15 +129,13 @@ def take_voice_command() -> tuple[str | None, bool]:
             print("Listening...")
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
             audio = recognizer.listen(source, timeout=6, phrase_time_limit=12)
-        query = recognizer.recognize_google(audio, language="en-US")
+        query = brain.transcribe(audio.get_wav_data(convert_rate=16_000, convert_width=2))
         print(f"You: {query}")
         return query.strip(), False
     except sr.WaitTimeoutError:
         print("No speech detected.")
-    except sr.UnknownValueError:
-        speak("I did not understand that. Please try again.")
-    except sr.RequestError as exc:
-        speak(f"Speech recognition service error: {exc}")
+    except RouterClientError as exc:
+        speak(f"Speech recognition is unavailable. {exc}")
         return None, True
     except (AttributeError, OSError) as exc:
         speak(f"Microphone unavailable: {exc}")
@@ -512,13 +512,12 @@ end tell
 
 
 def diagnostic_text(brain: Brain) -> str:
-    speech_status = "installed" if sr is not None else "not installed"
-    ai_status = (
-        f"configured for {brain.provider}; ask a question to test access"
-        if brain.active
-        else f"offline ({brain.last_error})"
+    microphone_status = "installed" if sr is not None else "not installed"
+    router_status = "ready" if brain.router_is_ready() else f"offline ({brain.last_error})"
+    return (
+        f"System: {SYSTEM}. Microphone capture: {microphone_status}. "
+        f"Multi-model router and Whisper: {router_status}. Local commands: ready."
     )
-    return f"System: {SYSTEM}. Voice recognition: {speech_status}. AI brain: {ai_status}. Local commands: ready."
 
 
 def current_time_text() -> str:
@@ -528,7 +527,7 @@ def current_time_text() -> str:
 
 
 def run(start_mode: str = "text") -> None:
-    brain = Brain(api_key_path=BASE_DIR / "api_key.txt")
+    brain = Brain()
     explorer = Explorer()
     explorer_state = {"ready": False}
     mode = start_mode
@@ -541,7 +540,7 @@ def run(start_mode: str = "text") -> None:
 
     while True:
         if mode == "voice":
-            captured, should_fallback = take_voice_command()
+            captured, should_fallback = take_voice_command(brain)
             if should_fallback:
                 mode = "text"
                 speak("Switching to text mode. You can type mode voice to try again.")
@@ -594,7 +593,10 @@ def run(start_mode: str = "text") -> None:
         elif intent == "clarify app":
             speak("Which app should I open? For example, say open Notion Calendar or open Safari.")
         else:
-            speak(brain.ask(payload))
+            answer = brain.ask(payload)
+            speak(answer)
+            if SHOW_ROUTE and brain.last_route:
+                print(f"[Router: {brain.last_route} → {brain.last_model}]")
 
 
 def parse_args() -> argparse.Namespace:
@@ -612,6 +614,6 @@ if __name__ == "__main__":
     if args.silent:
         SILENT = True
     if args.diagnose:
-        print(diagnostic_text(Brain(api_key_path=BASE_DIR / "api_key.txt")))
+        print(diagnostic_text(Brain()))
         raise SystemExit(0)
     run(start_mode="voice" if args.voice else "text")

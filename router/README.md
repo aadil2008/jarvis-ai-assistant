@@ -48,7 +48,7 @@ Retry delay honors Groq's `Retry-After` header where possible and is capped by `
 Python 3.11 or later is required.
 
 ```bash
-cd groq-router
+cd router
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

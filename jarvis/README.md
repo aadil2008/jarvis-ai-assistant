@@ -1,31 +1,27 @@
-# JARVIS
+# JARVIS Desktop Client
 
-JARVIS is a cross-platform personal voice and desktop assistant. Its local commands work without an API key. General conversation uses OpenAI or Groq when configured.
+This folder contains microphone input, conversation state, spoken output, and
+explicit computer actions. AI chat and Whisper transcription go through the
+router in the adjacent `router/` folder.
 
-## macOS setup
+For the easiest macOS setup, use `Setup_Jarvis.command` and
+`Start_Jarvis.command` in the repository root.
 
-1. Double-click `Setup_Jarvis.command` once.
-2. Double-click `Start_Jarvis.command` whenever you want to start Jarvis.
-3. Allow Microphone access when macOS asks. Opening apps and controlling the computer may also require Accessibility permission in **System Settings > Privacy & Security**.
+## Configuration
 
-If macOS blocks a command file, Control-click it, select **Open**, and confirm.
+The client reads only these optional environment variables:
 
-## Windows setup
+| Variable | Default | Purpose |
+|---|---|---|
+| `JARVIS_ROUTER_URL` | `http://127.0.0.1:8000` | Router address |
+| `JARVIS_ROUTER_API_KEY` | none | Revocable router credential |
+| `JARVIS_ROUTER_TIMEOUT` | `75` | Request timeout in seconds |
+| `JARVIS_SHOW_ROUTE` | false | Display selected route and model for demos |
+| `JARVIS_SILENT` | false | Disable spoken output |
 
-1. Double-click `Setup_Jarvis.bat` once.
-2. Double-click `Start_Jarvis.bat` whenever you want to start Jarvis.
-
-## Optional AI answers
-
-Local commands such as `open`, `find`, `time`, and `screenshot` do not need an API key.
-
-For AI answers, either set `OPENAI_API_KEY` or `GROQ_API_KEY`, or copy `api_key.example.txt` to `api_key.txt` and replace its contents with one key. Never share or commit `api_key.txt`.
-
-Jarvis automatically recognizes Groq keys beginning with `gsk_`, connects to Groq's OpenAI-compatible endpoint, and uses the production model `openai/gpt-oss-20b`. You do not need to change the code.
-
-An API key also needs available API credits. A ChatGPT subscription and OpenAI API billing are separate.
-
-The default model is `gpt-4o-mini`. You can select another model available to your API project with the `JARVIS_MODEL` environment variable.
+The desktop client does not load `GROQ_API_KEY` from a file. The combined root
+launcher reads the router secret from `router/.env` and gives the client only
+that secret.
 
 ## Commands
 
@@ -34,10 +30,38 @@ The default model is `gpt-4o-mini`. You can select another model available to yo
 - `search college scholarships in Safari`
 - `search MIT campus tour on YouTube`
 - `check my calendar` to read today's Apple Calendar events
-- `time`, `screenshot`, `minimize`, `volume up`, `volume down`, `mute`
-- Ask questions naturally, such as `How are you?` or `Explain quantum computing briefly`
+- `time`, `date`, `screenshot`, `minimize`, `volume up`, `volume down`, `mute`
+- Ask questions naturally, such as `How are you?` or `Analyze this design`
 - `mode text` or `mode voice`
-- `check` to see which features are ready
+- `check` to test the router and show local readiness
 - `quit`
 
-Jarvis indexes filenames only in Desktop, Documents, and Downloads when you first use `find` or try to open a file. It skips hidden folders and common development folders.
+JARVIS indexes filenames only in Desktop, Documents, and Downloads when file
+search is first used. It skips hidden and common development folders.
+
+## Direct developer launch
+
+Start the router first, then run:
+
+```bash
+export JARVIS_ROUTER_API_KEY="the_router_secret"
+python main.py --voice
+```
+
+Use `--text` for keyboard input, `--silent` to suppress speech, or `--diagnose`
+for a readiness check.
+
+## macOS permissions
+
+The microphone requires Microphone permission. Calendar, screenshots, or window
+control can also require permission under **System Settings > Privacy &
+Security**. JARVIS reports a failed action instead of telling the model to
+pretend it succeeded.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The desktop tests do not contact Groq or change the computer.
