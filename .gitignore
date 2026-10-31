@@ -10,3 +10,8 @@ __pycache__/
 .coverage
 htmlcov/
 .DS_Store
+local_config.json
+local_config.tmp
+jarvis/models/
+jarvis/router.log
+router/.env-setup-*

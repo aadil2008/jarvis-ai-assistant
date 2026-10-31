@@ -1,19 +1,20 @@
 # JARVIS-Inspired AI Desktop Assistant
 
-A macOS-first voice and desktop assistant connected to a secure, deterministic
-multi-model AI router. The project began with one question: how could an
-assistant move beyond a voice-enabled chatbot and perform useful actions on a
-real computer?
+A macOS-first voice and desktop assistant with two explicit setup choices:
 
-> **Status:** working prototype. Voice transcription and AI conversation now
-> travel through the router, while computer actions remain explicit local code.
-> The limitations below are intentional and documented.
+- **Run locally:** Ollama chat, offline Whisper speech recognition, and your computer's voice. No API key; internet is needed once for downloads.
+- **Use Groq API:** your Groq key powers chat and speech through a private local router. Internet is required; provider limits and charges may apply.
+
+Setup remembers your choice. JARVIS never silently switches between local and cloud processing. Computer actions remain explicit local code; model output is never executed as a command.
+
+> **Status:** working prototype. Local model selection uses conservative RAM estimates, not a guarantee of real-time voice performance.
 
 ## What works
 
 ### Desktop assistant
 
-- Captures speech and transcribes it with Whisper through the private router
+- Captures speech and transcribes it with offline Whisper or the selected Groq backend
+- Detects installed and available RAM, recommends an Ollama model, and offers smaller alternatives
 - Opens applications, websites, and local files
 - Searches Google and YouTube
 - Reads today's Apple Calendar events with permission
@@ -22,7 +23,7 @@ real computer?
 - Keeps bounded conversation history during a session
 - Speaks concise responses on macOS
 
-### Multi-model router
+### Optional Groq multi-model router
 
 - Normal questions → `openai/gpt-oss-20b`
 - Difficult reasoning → `openai/gpt-oss-120b`
@@ -35,44 +36,41 @@ real computer?
 ## Architecture
 
 ```text
-User voice
-    │
-    ▼
-JARVIS desktop controller
-    ├── Safe local command ──► explicit macOS action ──► confirmed result
-    │
-    ├── Recorded WAV ────────► /v1/transcribe ────────► Whisper V3 Turbo
-    │
-    └── AI request ──────────► /v1/chat
-                                  ├── Normal ─────────► GPT-OSS 20B
-                                  ├── Reasoning ──────► GPT-OSS 120B
-                                  ├── Coding ─────────► Qwen 3.8 27B
-                                  └── Current web ────► Groq Compound
+User voice → microphone → chosen speech backend → JARVIS controller
+                                                ├─ explicit local action
+                                                └─ chosen chat backend → spoken reply
+Local: offline Whisper + Ollama on 127.0.0.1:11434
+Groq:  private loopback router → Groq speech/chat APIs
 ```
 
-The Groq API key belongs only to the router process. JARVIS receives a separate,
-revocable router key. Model responses are never executed as system commands.
+In Groq mode, the provider key belongs only to the router process. JARVIS
+receives a separate random router credential. In local mode, audio stays in
+memory and neither chat nor speech calls the cloud.
 
-## Quick start on macOS
+## Install on macOS or Windows
 
-Python 3.11 or later is required.
+Use **Python 3.11–3.13** (3.12 recommended for audio package compatibility).
 
-1. Double-click `Setup_Jarvis.command` once.
-2. Open `router/.env` and replace both placeholders:
-   - `GROQ_API_KEY` receives the Groq key.
-   - `ROUTER_API_KEY` receives a different random secret.
-3. Double-click `Start_Jarvis.command`.
-4. Allow microphone and other requested macOS permissions.
+1. Download or clone this repository.
+2. On macOS, double-click **Setup_Jarvis.command**. On Windows, double-click **Setup_Jarvis.bat**.
+3. JARVIS asks **1. Locally with Ollama** or **2. Groq API**.
+4. For local mode, install and open [Ollama](https://ollama.com/download), review the RAM recommendation, select a model, and approve the displayed download. Setup also downloads offline Whisper and checks both engines before saving settings.
+5. For Groq mode, enter your own [Groq API key](https://console.groq.com/keys) at the hidden terminal prompt. Setup saves it in ignored `router/.env` and generates the private router secret. An existing key can be reused. No local model is downloaded.
+6. Run **Start_Jarvis.command** or **Start_Jarvis.bat**. Allow microphone access when requested.
 
-Generate the router secret with:
+Type or say **setup**, or rerun the setup file, to change the backend; restart
+JARVIS after saving. Cancelling leaves existing settings unchanged. The first
+launch also asks for a backend if setup has not saved one yet.
 
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-```
+The local recommendation starts at Qwen3 0.6B for 4 GB RAM, 1.7B for 8 GB,
+4B for 16 GB, and 8B for 32 GB or more. Available memory can lower or block
+that recommendation. These are JARVIS estimates with room for speech and the
+OS, not Ollama's official minimum requirements. See [local setup details](docs/LOCAL_SETUP.md).
 
-The combined launcher starts the router only on `127.0.0.1`, waits for its
-health check, passes only the router key to JARVIS, and shuts the router down
-when JARVIS exits.
+The Groq launcher binds a private router to a free loopback port, waits for
+its health check, and stops it when JARVIS exits. Neither launcher starts a
+public web server. Groq key authentication is checked on service use; saving
+a key does not prove that it is active or has quota.
 
 ## Repository structure
 
@@ -88,7 +86,9 @@ See [`jarvis/README.md`](jarvis/README.md),
 
 ## Tests
 
-All automated tests use fake clients and consume no Groq quota.
+Automated tests use fake clients and consume no Groq quota. Install both
+`jarvis/requirements-local.txt` and `router/requirements.txt` in your test
+environment before running both suites.
 
 ```bash
 python3 -m unittest discover -s jarvis/tests -v
@@ -103,7 +103,7 @@ standardized errors, usage statistics, and secret-safe connection failures.
 
 ## Security choices
 
-- `.env`, `api_key.txt`, generated data, virtual environments, and credentials
+- `.env`, local model settings, downloaded speech models, generated data, virtual environments, and credentials
   are excluded from Git.
 - The desktop client does not receive the Groq key.
 - The router does not log prompts, authorization headers, or API keys.
@@ -128,6 +128,11 @@ directed and reviewed by the project creator.
 - It has no always-listening wake word.
 - It deliberately supports a limited set of local actions.
 - Some actions require macOS privacy permissions.
+- Local voice recognition is English-only in this setup.
+- RAM does not determine latency by itself; CPU/GPU speed and other apps matter.
+- Local answers do not have live web research. Explicit web searches still open online websites.
+- Local chat uses a 2,048-token context and short conversation history.
+- Windows launchers are provided; macOS-specific actions such as Apple Calendar remain macOS-only.
 - Confirmation gates must be added before introducing sensitive or destructive
   actions.
 

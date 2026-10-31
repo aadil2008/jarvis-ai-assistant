@@ -12,6 +12,6 @@ else
   PYTHON="$(command -v python3)"
 fi
 
-"$PYTHON" main.py --voice
+"$PYTHON" launch.py --voice
 echo
 read "REPLY?Press Return to close..."

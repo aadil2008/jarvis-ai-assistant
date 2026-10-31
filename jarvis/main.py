@@ -117,7 +117,7 @@ def text_for_speech(text: str, max_characters: int = 500) -> str:
 
 
 def take_voice_command(brain: Brain) -> tuple[str | None, bool]:
-    """Capture microphone audio and transcribe it through the private router."""
+    """Capture audio and use the selected local or router speech backend."""
     if sr is None:
         speak("Voice recognition is not installed. Run the setup file first.")
         return None, True
@@ -154,6 +154,7 @@ def help_text() -> str:
         "- ask a question naturally\n"
         "- mode text or mode voice\n"
         "- check\n"
+        "- setup (choose Groq API or local mode; restart afterwards)\n"
         "- quit"
     )
 
@@ -219,6 +220,8 @@ def parse_local_intent(raw: str) -> tuple[str, str]:
         return "mute", ""
     if lower in {"check", "system check", "run a system check", "diagnostics"}:
         return "check", ""
+    if lower in {"setup", "change ai mode", "switch ai backend"}:
+        return "setup", ""
     if lower in {"look at the app", "look at app", "open the app", "open app"}:
         return "clarify app", ""
 
@@ -514,9 +517,12 @@ end tell
 def diagnostic_text(brain: Brain) -> str:
     microphone_status = "installed" if sr is not None else "not installed"
     router_status = "ready" if brain.router_is_ready() else f"offline ({brain.last_error})"
+    voice_status = ""
+    if hasattr(brain.client, "voice_ready"):
+        voice_status = " Offline speech files: " + ("ready." if brain.client.voice_ready() else "missing; re-run setup.")
     return (
         f"System: {SYSTEM}. Microphone capture: {microphone_status}. "
-        f"Multi-model router and Whisper: {router_status}. Local commands: ready."
+        f"{brain.provider}: {router_status}.{voice_status} Local commands: ready."
     )
 
 
@@ -532,6 +538,7 @@ def run(start_mode: str = "text") -> None:
     explorer_state = {"ready": False}
     mode = start_mode
 
+    print(f"AI backend: {brain.provider}")
     speak("Jarvis is ready.")
     if mode == "voice" and sr is None:
         speak("Voice recognition is not installed, so I am starting in text mode.")
@@ -590,6 +597,10 @@ def run(start_mode: str = "text") -> None:
             speak(change_volume(intent))
         elif intent == "check":
             speak(diagnostic_text(brain))
+        elif intent == "setup":
+            from setup_assistant import run_setup
+            run_setup()
+            speak("Restart JARVIS to use any saved changes.")
         elif intent == "clarify app":
             speak("Which app should I open? For example, say open Notion Calendar or open Safari.")
         else:
@@ -606,6 +617,7 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--text", action="store_true", help="start in text mode")
     parser.add_argument("--silent", action="store_true", help="disable spoken output")
     parser.add_argument("--diagnose", action="store_true", help="show readiness and exit")
+    parser.add_argument("--recommend", action="store_true", help="show local model recommendations for this RAM and exit")
     return parser.parse_args()
 
 
@@ -613,7 +625,15 @@ if __name__ == "__main__":
     args = parse_args()
     if args.silent:
         SILENT = True
-    if args.diagnose:
-        print(diagnostic_text(Brain()))
+    if args.recommend:
+        from local_setup import describe, detect_memory
+        print(describe(detect_memory()))
         raise SystemExit(0)
-    run(start_mode="voice" if args.voice else "text")
+    try:
+        if args.diagnose:
+            print(diagnostic_text(Brain()))
+            raise SystemExit(0)
+        run(start_mode="voice" if args.voice else "text")
+    except RouterClientError as exc:
+        print(f"JARVIS setup needed: {exc}")
+        raise SystemExit(1)

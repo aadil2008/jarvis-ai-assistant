@@ -12,6 +12,12 @@ else
   exit 1
 fi
 
+if ! "$PYTHON" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, 13) else 1)'; then
+  echo "Local speech setup requires Python 3.11-3.13. Install Python 3.12 from python.org and retry."
+  read "REPLY?Press Return to close..."
+  exit 1
+fi
+
 if command -v brew >/dev/null && ! brew list portaudio >/dev/null 2>&1; then
   echo "Installing the microphone audio component..."
   brew install portaudio
@@ -22,6 +28,6 @@ fi
 .venv/bin/python -m pip install -r requirements.txt
 
 echo
-echo "Setup finished. Double-click Start_Jarvis.command to begin."
-echo "macOS may ask for Microphone, Accessibility, and Screen Recording permission."
+.venv/bin/python setup_assistant.py || { read "REPLY?Press Return to close..."; exit 1; }
+echo "Double-click Start_Jarvis.command after setup succeeds."
 read "REPLY?Press Return to close..."
