@@ -27,16 +27,23 @@ class BrainConfig:
 
 
 class Brain:
-    """Conversation state backed by the private multi-model router."""
+    """Conversation state backed by local Ollama or the optional private router."""
 
     def __init__(
         self,
         client: RouterClient | None = None,
         config: BrainConfig | None = None,
     ) -> None:
-        self.client = client or RouterClient()
+        if client is None:
+            from local_settings import provider
+            if provider() == "local":
+                from local_client import LocalClient
+                client = LocalClient()
+            else:
+                client = RouterClient()
+        self.client = client
         self.config = config or BrainConfig()
-        self.provider = "multi-model router"
+        self.provider = "local Ollama + offline Whisper" if hasattr(client, "voice_ready") else "multi-model router"
         self.history: list[dict[str, str]] = []
         self.last_error = ""
         self.last_model = ""
